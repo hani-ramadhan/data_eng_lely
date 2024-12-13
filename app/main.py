@@ -1,18 +1,34 @@
 from typing import Optional
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
-import httpx
 import uvicorn 
 from .services.event_service import EventService
 from .models.github_events import EventResponse
+import asyncio
 
 
+# Define the lifespan context manager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Create background task for event collection
+    event_collection_task = asyncio.create_task(EventService.start_event_collection())
+    yield
+    # Shutdown: Cancel the background task
+    event_collection_task.cancel()
+    try:
+        await event_collection_task
+    except asyncio.CancelledError:
+        # Task was canceled, cleanup completed
+        pass
 
 # Create FastAPI application instance
 app = FastAPI(
     title="GitHub Events API",
     description="A simple API to monitor GitHub events",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
+
 
 @app.get("/")
 async def root():
@@ -46,6 +62,22 @@ async def get_event_counts(offset: int):
             detail="Offset must be greater than 0"
         )
     return await EventService.count_events_by_type(offset)
+
+@app.get("/storage/stats")
+async def get_storage_stats():
+    """Get current storage statistics"""
+    return {
+        "total_events_stored": len(EventService._event_storage),
+        "last_fetch_time": EventService._last_fetch_time,
+        "fetch_interval": EventService.FETCH_INTERVAL_SECONDS
+    }
+
+@app.get("/metrics/pr-time-gap")
+async def get_pr_time_gap(repository: str):
+    """
+    Use as: /metrics/pr-time-gap?repository=owner/repo
+    """
+    return await EventService.calculate_pr_time_gap(repository)
 
 # Modified to work better in production
 if __name__ == "__main__":
