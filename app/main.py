@@ -38,23 +38,10 @@ async def root():
             "supported_event_types": list(EventService.ALLOWED_EVENT_TYPES)
     }
 
-@app.get("/events", response_model=EventResponse)
-async def get_events(event_type: Optional[str] = None):
-    """
-    Fetch GitHub events with optional type filtering.
-    
-    Args:
-        event_type: Optional filter for specific event types (WatchEvent, PullRequestEvent, IssuesEvent)
-        
-    Returns:
-        EventResponse containing the filtered events and metadata
-    """
-    return await EventService.fetch_events(event_type)
-
 @app.get("/metrics/event-count/{offset}")
 async def get_event_counts(offset: int):
     """
-    Get event counts by type for the specified time offset (minutes)
+    Get event counts by type {PullRequest, Issue, Watch} for the specified time offset (minutes)
     """
     if offset <= 0:
         raise HTTPException(
@@ -78,6 +65,11 @@ async def get_pr_time_gap(repository: str):
     Use as: /metrics/pr-time-gap?repository=owner/repo
     """
     return await EventService.calculate_pr_time_gap(repository)
+
+@app.get("/multiple-pr")
+async def get_multiple_pr():
+    return await EventService.get_repo_with_multiple_pr()
+
 
 # Modified to work better in production
 if __name__ == "__main__":
