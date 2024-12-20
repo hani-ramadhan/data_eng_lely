@@ -38,6 +38,7 @@ cd <repository-name>
 cp .env.example .env
 # Add your GitHub token to .env file
 ```
+Update the content with your github token
 
 3. Start the system:
 ```bash
