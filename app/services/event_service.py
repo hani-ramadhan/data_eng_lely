@@ -107,7 +107,7 @@ class EventService:
                         break
                     i += 1
 
-            _last_fetch_time = current_time
+            cls._last_fetch_time = current_time
             
             # Process and store events
             for event_data in all_events:
@@ -115,7 +115,6 @@ class EventService:
                     continue
 
                 event_id = event_data['id']
-                cls._event_storage = cls._event_storage +1
                 
                 # Check for duplicates using Redis SET
                 if cls.redis_client.sismember('event_ids', event_data['id']):
@@ -189,7 +188,7 @@ class EventService:
                     pipe.execute()
 
             print(f"summary: ")
-            print(f"Total stored events: {cls._event_storage}")
+            print(f"Stored events: {new_events_count}")
         except Exception as e:
             print(f"Error storing events: {str(e)}")
             raise
@@ -201,7 +200,10 @@ class EventService:
         """Count events by type for events within the last X minutes"""
         try:
             current_time = datetime.now(timezone.utc)
-            min_time = (current_time - timedelta(minutes=offset)).timestamp()
+            if offset == -1:
+                min_time = '-inf'
+            else:
+                min_time = (current_time - timedelta(minutes=offset)).timestamp()
             max_time = (current_time).timestamp()
 
             counts = {}
@@ -294,3 +296,4 @@ class EventService:
                 detail=f"Failed to list out repo with multiple PRs: {str(e)}"
             )
         
+

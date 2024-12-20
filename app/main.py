@@ -1,10 +1,23 @@
+from datetime import datetime
+from tempfile import template
 from typing import Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
-import uvicorn 
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+import uvicorn
+
+from app.services.monitoring_charts import GithubMonitoringCharts
+from app.services.historical_data_service import HistoricalDataService 
 from .services.event_service import EventService
 from .models.github_events import EventResponse
 import asyncio
+
+from jinja2 import Environment, FileSystemLoader
+
+from fastapi.templating import Jinja2Templates
+
+
+
 
 
 # Define the lifespan context manager
@@ -28,6 +41,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+
+templates = Jinja2Templates(directory="./app/templates")
+
 
 
 @app.get("/")
@@ -69,6 +85,66 @@ async def get_pr_time_gap(repository: str):
 @app.get("/multiple-pr")
 async def get_multiple_pr():
     return await EventService.get_repo_with_multiple_pr()
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def get_dashboard(request: Request, repository: str = "example/repo"):
+    """Serve the monitoring dashboard"""
+    try:
+
+        # Store current metrics
+        await HistoricalDataService.store_metrics_snapshot(EventService)
+        
+        # # Get current event data
+        # current_data = await EventService.count_events_by_type(10)
+        
+        # Get total data
+        all_data = await EventService.count_events_by_type(-1)
+
+        # Get historical data (last 15 minutes)
+        historical_data = await HistoricalDataService.get_historical_data(EventService)
+        
+        # Get PR data for specified repository
+        # pr_data = await EventService.calculate_pr_time_gap(repository)
+        historical_pr_data = await HistoricalDataService.get_historical_data(repository)
+        
+        # Generate charts
+        charts = {
+            'total_events': GithubMonitoringCharts.create_total_events_chart(historical_data),
+            'distribution': GithubMonitoringCharts.create_distribution_chart(historical_data),
+            'pr_time': GithubMonitoringCharts.create_pr_time_chart(historical_pr_data, repository)
+        }
+        
+        # Calculate current totals
+        current_counts = all_data['counts']
+        total_events = sum(current_counts.values())
+        
+        return templates.TemplateResponse(
+            "monitoring.html",
+            {
+                "request": request,
+                "charts": charts,
+                "current_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "total_events": total_events,
+                "watch_events": current_counts.get('WatchEvent', 0),
+                "issue_events": current_counts.get('IssuesEvent', 0),
+                "pr_events": current_counts.get('PullRequestEvent', 0),
+                "current_repository": repository
+            }
+        )
+    except Exception as e:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "error": str(e)
+            }
+        )
+
+@app.post("/update-repository")
+async def update_repository(repository: str = Form(...)):
+    """Handle repository update form submission"""
+    return RedirectResponse(url=f"/dashboard?repository={repository}", status_code=303)
 
 
 # Modified to work better in production

@@ -3,4 +3,7 @@ fastapi==0.109.2
 uvicorn==0.27.1 
 httpx==0.26.0 
 python-dotenv==1.0.1
-redis==5.0.1
+redis==5.2.1
+pygal==3.0.0
+jinja2==3.0.0
+python-multipart==0.0.19
