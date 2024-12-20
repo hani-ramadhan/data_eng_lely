@@ -3,24 +3,7 @@
 A system that allows GitHub Event Analysts to monitor and analyze PullRequest, Watch, and Issue events from GitHub repositories.
 
 ## System Context
-
-```mermaid
-graph TB
-    Analyst[GitHub Event Analyst<br/>[Person]<br/>An analyst who monitors PullRequest,<br/>Watch, and Issue events from GitHub]
-    Monitor[GitHub Event Monitoring System<br/>[Software System]<br/>Allows GitHub Event Analyst to view the pull<br/>request average time gap for some repositories<br/>and event count for each GitHub event types]
-    API[GitHub Event API<br/>[Software System]<br/>Capture the events happening in GitHub]
-
-    Analyst -->|Monitors GitHub PullRequest,<br/>Watch, and Issue events from using| Monitor
-    Monitor -->|Gets PullRequest, Watch, and<br/>Issues Event from| API
-
-    classDef person fill:#8b0000,stroke:#333,stroke-width:2px,color:#fff;
-    classDef system fill:#8b0000,stroke:#333,stroke-width:2px,color:#fff;
-    classDef external fill:#808080,stroke:#333,stroke-width:2px,color:#fff;
-
-    class Analyst person;
-    class Monitor system;
-    class API external;
-```
+See context_diagram.pdf
 
 ## Key Features
 
