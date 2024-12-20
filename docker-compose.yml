@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - REDIS_HOST=events-redis
+      - HISTORICAL_REDIS_HOST=historical-redis
+    depends_on:
+      - events-redis
+      - historical-redis
+    networks:
+      - github-events-network
+    volumes:
+      - .:/app
+
+  events-redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - events-redis-data:/data
+    networks:
+      - github-events-network
+
+  historical-redis:
+    image: redis:alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - historical-redis-data:/data
+    networks:
+      - github-events-network
+
+volumes:
+  events-redis-data:
+  historical-redis-data:
+
+networks:
+  github-events-network:
+    driver: bridge

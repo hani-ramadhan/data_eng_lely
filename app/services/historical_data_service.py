@@ -1,40 +1,41 @@
 from datetime import datetime, timedelta
-from tempfile import template
-from ..services.event_service import EventService
-import pygal
-from pygal.style import Style
 import json
 import redis
 import os
 
-# Custom style for consistent look
-CUSTOM_STYLE = Style(
-    background='transparent',
-    plot_background='transparent',
-    foreground='#333',
-    foreground_strong='#333',
-    colors=('#2ecc71', '#3498db', '#e74c3c'),  # Green, Blue, Red
-    font_family='Arial'
-)
-
 class HistoricalDataService:
-    """Service to handle historical data storage and retrieval"""
-
     # Separate Redis client for historical data
+
+    # # for local
+    # redis_client = redis.Redis(
+    #     host=os.getenv('HISTORICAL_REDIS_HOST', 'localhost'),
+    #     port=int(os.getenv('HISTORICAL_REDIS_PORT', 6380)),
+    #     decode_responses=True
+    # )
+
+    
+
+    # for docker
     redis_client = redis.Redis(
-        host=os.getenv('HISTORY_REDIS_HOST', 'localhost'),
-        port=int(os.getenv('HISTORY_REDIS_PORT', 6380)),  # Note different default port
+        host=os.getenv('HISTORICAL_REDIS_HOST', 'historical-redis'),  # Changed from localhost to historical-redis
+        port=6379,  
         decode_responses=True
     )
-    
+
+    STORE_SNAPSHOT_TIME_WINDOW = 10 # in minutes
+
     @classmethod
-    async def store_metrics_snapshot(cls, event_service: EventService):
-        """Store current metrics in Redis with timestamp"""
+    async def store_metrics_snapshot(cls, event_service_method):
+        """
+        Store current metrics in Redis with timestamp
+        
+        :param event_service_method: Method to count events (to break circular dependency)
+        """
         try:
             current_time = datetime.now()
             
-            # Get current metrics from event service
-            event_data = await event_service.count_events_by_type(10)
+            # Get current metrics for a fixed t-minute window
+            event_data = await event_service_method(cls.STORE_SNAPSHOT_TIME_WINDOW)
 
             # Prepare data for storage
             snapshot_serialized = {
@@ -43,6 +44,7 @@ class HistoricalDataService:
                 'total': str(sum(event_data['counts'].values()))
             }
             
+            print(snapshot_serialized)
             # Use historical service's own Redis client
             pipe = cls.redis_client.pipeline()
             
@@ -64,14 +66,18 @@ class HistoricalDataService:
             print(f"Error storing metrics snapshot: {e}")
 
     @classmethod
-    async def get_historical_data(cls, event_service: EventService) -> list:
-        """Retrieve historical data for the specified time period"""
+    async def get_historical_data(cls):
+        """
+        Retrieve historical data 
+        
+        :param event_service_method: Optional method, kept for compatibility
+        """
         try:
-            # Use historical service's own Redis client
-            snapshot_keys = cls.redis_client.zrangebyscore(
+            # Retrieve snapshot keys
+            snapshot_keys = cls.redis_client.zrange(
                 'metrics:snapshots',
-                '-inf',
-                '+inf'
+                -10,  # Last 10 snapshots
+                -1
             )
             
             historical_data = []
@@ -82,67 +88,8 @@ class HistoricalDataService:
                     snapshot['counts'] = json.loads(snapshot['counts'])
                     historical_data.append(snapshot)
             
-            print(historical_data)
             return sorted(historical_data, key=lambda x: x['timestamp'])
             
         except Exception as e:
             print(f"Error retrieving historical data: {e}")
             return []
-
-class EnhancedDashboardChartGenerator:
-    @staticmethod
-    def create_event_distribution_history(historical_data: list) -> str:
-        """Generate time series chart for event distribution"""
-        chart = pygal.Line(
-            style=CUSTOM_STYLE,
-            height=300,
-            show_legend=True,
-            x_label_rotation=45,
-            compress=True
-        )
-        chart.title = 'Event Distribution Over Time'
-        
-        # Prepare data series for each event type
-        event_series = {}
-        timestamps = []
-        
-        for snapshot in historical_data:
-            timestamp = datetime.fromtimestamp(snapshot['timestamp'])
-            timestamps.append(timestamp.strftime('%H:%M:%S'))
-            
-            for event_type, count in snapshot['counts'].items():
-                if event_type not in event_series:
-                    event_series[event_type] = []
-                event_series[event_type].append(count)
-        
-        # Add data series to chart
-        for event_type, counts in event_series.items():
-            label = event_type.replace('Event', '')
-            chart.add(label, counts)
-        
-        chart.x_labels = timestamps
-        return chart.render()
-
-    @staticmethod
-    def create_total_events_history(historical_data: list) -> str:
-        """Generate time series chart for total events"""
-        chart = pygal.Line(
-            style=CUSTOM_STYLE,
-            height=300,
-            show_legend=False,
-            x_label_rotation=45,
-            compress=True
-        )
-        chart.title = 'Total Events Over Time'
-        
-        timestamps = []
-        totals = []
-        
-        for snapshot in historical_data:
-            timestamp = datetime.fromtimestamp(snapshot['timestamp'])
-            timestamps.append(timestamp.strftime('%H:%M:%S'))
-            totals.append(int(snapshot['total']))
-        
-        chart.add('Total Events', totals)
-        chart.x_labels = timestamps
-        return chart.render()

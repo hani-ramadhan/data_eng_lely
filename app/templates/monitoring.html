@@ -122,13 +122,18 @@
         <div class="chart-card">
             {{ charts.distribution | safe }}
         </div>
-        <div class="chart-card full-width">
+        <!-- <div class="chart-card full-width">
             <form class="repository-form" action="/update-repository" method="post">
                 <input type="text" name="repository" value="{{ current_repository }}" placeholder="owner/repository">
                 <button type="submit">Update Repository</button>
             </form>
             {{ charts.pr_time | safe }}
-        </div>
+        </div> -->
+    </div>
+
+    <div class="chart-card full-width">
+        <h3>Repository PR Statistics - Top Active Repositories</h3>
+        {{ charts.pr_comparison | safe }}
     </div>
 </body>
 </html>

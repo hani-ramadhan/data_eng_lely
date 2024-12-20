@@ -29,7 +29,7 @@ class GithubMonitoringCharts:
             dots_size=2,
             compress=True
         )
-        chart.title = 'Total Events Over Time'
+        chart.title = 'Total Events Over Time (Time Window = 10 mins)'
         
         # Prepare data series
         timestamps = []
@@ -63,7 +63,7 @@ class GithubMonitoringCharts:
             dots_size=2,
             compress=True
         )
-        chart.title = 'Event Distribution Over Time'
+        chart.title = 'Event Distribution Over Time (Time Window = 10 mins)'
         
         # Calculate percentages
         timestamps = []
@@ -114,5 +114,49 @@ class GithubMonitoringCharts:
         
         chart.x_labels = timestamps
         chart.add('Average Time (minutes)', avg_times)
+        
+        return chart.render()
+    
+    @staticmethod
+    def create_pr_comparison_chart(pr_stats: list) -> str:
+        """Generate bar chart comparing PR metrics across repositories"""
+        chart = pygal.Bar(
+            style=CUSTOM_STYLE,
+            height=400,
+            show_legend=False,  # Remove legend
+            x_label_rotation=45,
+            title='Average Time Between PRs for 10 Repositories with Most PR',
+            y_title='Minutes',
+            print_values=False,  # Show values on bars
+            print_labels=True,  # Enable custom labels on bars
+            margin_right=15  # Adjust right margin if needed
+
+        )
+        
+        # Clean and format data
+        repositories = []
+        avg_times = []
+        
+        for stat in pr_stats:
+            # Get repo name and decode if needed
+            repo_name = stat['repository']
+            try:
+                # Try to decode if it's URL encoded
+                repo_name = repo_name.encode('latin1').decode('utf-8')
+            except:
+                pass
+                
+            # Truncate long names properly
+            if len(repo_name) > 30:
+                repo_name = repo_name[:27].strip() + "..."
+                
+            repositories.append(repo_name)
+            avg_times.append({
+                'value': stat['avg_time'],
+                'label': f'PRs: {stat["pr_count"]}'
+            })
+        
+        chart.x_labels = repositories
+        chart.add('', avg_times)  # Empty string for no legend
         
         return chart.render()

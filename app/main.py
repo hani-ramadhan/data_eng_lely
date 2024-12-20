@@ -8,8 +8,8 @@ import uvicorn
 
 from app.services.monitoring_charts import GithubMonitoringCharts
 from app.services.historical_data_service import HistoricalDataService 
-from .services.event_service import EventService
-from .models.github_events import EventResponse
+from app.services.event_service import EventService
+from app.models.github_events import EventResponse
 import asyncio
 
 from jinja2 import Environment, FileSystemLoader
@@ -93,7 +93,7 @@ async def get_dashboard(request: Request, repository: str = "example/repo"):
     try:
 
         # Store current metrics
-        await HistoricalDataService.store_metrics_snapshot(EventService)
+        await HistoricalDataService.store_metrics_snapshot(EventService.count_events_by_type)
         
         # # Get current event data
         # current_data = await EventService.count_events_by_type(10)
@@ -102,17 +102,37 @@ async def get_dashboard(request: Request, repository: str = "example/repo"):
         all_data = await EventService.count_events_by_type(-1)
 
         # Get historical data (last 15 minutes)
-        historical_data = await HistoricalDataService.get_historical_data(EventService)
+        historical_data = await HistoricalDataService.get_historical_data()
         
         # Get PR data for specified repository
-        # pr_data = await EventService.calculate_pr_time_gap(repository)
-        historical_pr_data = await HistoricalDataService.get_historical_data(repository)
+        # # pr_data = await EventService.calculate_pr_time_gap(repository)
+        # historical_pr_data = await HistoricalDataService.get_historical_data(repository)
         
+        # Get top repositories with PR counts
+        top_repos = await EventService.get_repo_with_multiple_pr(min_prs=2)
+        # print(top_repos[-10:])
+        # Get PR time gap for each top repository
+        pr_stats = []
+
+        for repo, count in top_repos[-10:]:  # Limit to top 10 repos
+            stats = await EventService.calculate_pr_time_gap(repo)
+            if stats.get('average_time_between_prs'):  # Only add if we have valid average
+                pr_stats.append({
+                    'repository': repo,
+                    'pr_count': count,
+                    'avg_time': stats['average_time_between_prs']
+                })
+        
+        # Sort by PR count descending
+        pr_stats.sort(key=lambda x: x['pr_count'], reverse=True)
+
         # Generate charts
         charts = {
             'total_events': GithubMonitoringCharts.create_total_events_chart(historical_data),
             'distribution': GithubMonitoringCharts.create_distribution_chart(historical_data),
-            'pr_time': GithubMonitoringCharts.create_pr_time_chart(historical_pr_data, repository)
+            'pr_comparison': GithubMonitoringCharts.create_pr_comparison_chart(pr_stats),
+            # 'pr_time': GithubMonitoringCharts.create_pr_time_chart(historical_pr_data, repository)
+        
         }
         
         # Calculate current totals

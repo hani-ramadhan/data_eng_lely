@@ -30,13 +30,25 @@ class EventService:
     _oldest_event_id: Optional[str] = None
     _oldest_event_time: Optional[datetime] = None
     _event_ids: Set[Tuple[str, datetime]] = set()
+    _log_start_time_collection: datetime = datetime.now(timezone.utc)
+    _total_new_events = 0
+    _total_duplicates = 0
+
+    PAGINATION_LENGTH = 2 # Capture api up to n pages
+    FETCH_INTERVAL_SECONDS = 0.5 # Fetch every t seconds
+
     CLEANUP_MINUTES = 30
+    # #for local
+    # redis_client = redis.Redis(
+    #     host='localhost', 
+    #     port=6379, 
+    #     decode_responses=True)
+    
+    # #for docker
     redis_client = redis.Redis(
-        host='localhost', 
+        host=os.getenv('REDIS_HOST', 'events-redis'),  # Changed from localhost to events-redis
         port=6379, 
         decode_responses=True)
-    
-    FETCH_INTERVAL_SECONDS = 1 # Fetch every 1 seconds
 
 
     ALLOWED_EVENT_TYPES = {'WatchEvent', 'PullRequestEvent', 'IssuesEvent'}
@@ -72,7 +84,7 @@ class EventService:
             # Fetch events (keeping existing fetch logic...)
             async with httpx.AsyncClient() as client:
                 i = 0
-                while next_url and i < 5:
+                while next_url and i < cls.PAGINATION_LENGTH:
                     response = await client.get(next_url, headers=cls.get_headers())
                     response.raise_for_status()
                     
@@ -86,6 +98,7 @@ class EventService:
                     
                     # # Check rate limit
                     remaining = int(response.headers.get('X-RateLimit-Remaining', 0))
+                    print(f"reset time: {response.headers.get('X-RateLimit-Reset',0)}, remaining: {remaining}")
                     if remaining < 200:
                         print(f"Remaining API calls: {remaining}")
                     
@@ -186,9 +199,14 @@ class EventService:
                         pipe.srem('event_ids', event_id)
                         pipe.zrem('events_by_time', event_id)
                     pipe.execute()
-
-            print(f"summary: ")
-            print(f"Stored events: {new_events_count}")
+            cls._total_new_events += new_events_count
+            cls._total_duplicates += duplicate_count
+            # print(f"summary: ")
+            # print(f"Stored events: {new_events_count}")
+            print(current_time - cls._log_start_time_collection)
+            if current_time - cls._log_start_time_collection > timedelta(minutes=3):
+                print(f"total stored events: {cls._total_new_events}")
+                print(f"total duplicates: {cls._total_duplicates}")
         except Exception as e:
             print(f"Error storing events: {str(e)}")
             raise
