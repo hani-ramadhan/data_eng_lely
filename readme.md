@@ -124,11 +124,3 @@ docker-compose down
 3. Extended historical data analysis
 4. Export capabilities
 5. Advanced repository metrics
-
-## Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
-
-## License
-MIT License - See LICENSE file for details
